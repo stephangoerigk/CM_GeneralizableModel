@@ -1,0 +1,307 @@
+```{r}
+
+# Load a CSV file in R Markdown
+df <- read.csv(r"(C:\Forschung\ctq\Ulm\Ulm_merged_CTQ.csv)")
+
+# Look at the first few rows to verify it loaded correctly
+head(df)
+
+```
+
+```{r}
+library(dplyr)
+
+df <- df %>%
+  rename(ID = LFD,
+         CTQ_EmotionalAbuse = CTQ_EM,
+         CTQ_PhysicalAbuse = CTQ_KM,
+         CTQ_SexualAbuse = CTQ_SM,
+         CTQ_EmotionalNeglect = CTQ_EV,
+         CTQ_PhysicalNeglect = CTQ_KV)
+```
+
+```{r}
+head(df)
+```
+```{r}
+CTQ = df[, c("ID", 
+             "CTQ_EmotionalAbuse",
+             "CTQ_PhysicalAbuse",
+             "CTQ_SexualAbuse",        
+             "CTQ_EmotionalNeglect",
+             "CTQ_PhysicalNeglect")]
+
+CTQ = na.omit(CTQ)
+```
+
+```{r}
+install.packages("ggiraphExtra")
+```
+
+
+```{r}
+library(dynamicTreeCut)
+library(ggiraphExtra)
+library(ggplot2)
+library(dynamicTreeCut)
+library(ggiraphExtra)
+
+library(ggplot2)
+library(dynamicTreeCut)
+library(ggiraphExtra)
+
+# Define colors
+col_blue <- "#0072B2"
+col_orange <- "#E69F00" 
+col_green <- "#009E73"
+
+# Rest of your code with the ggplot2 library loaded
+dt = dist(na.omit(CTQ[,2:6]), method = "euclidean")  # Fixed column range
+clust = hclust(dt, method = "ward.D2")
+dend <- as.dendrogram(clust, hang = -1)
+pruned = dynamicTreeCut::cutreeDynamic(clust, distM = as.matrix(dt), method = "hybrid", minClusterSize = 1)
+table(pruned)
+
+CTQ$pruned = factor(pruned)
+
+levels(CTQ$pruned) = paste("Type", levels(CTQ$pruned))
+
+radar_traumatype = ggiraphExtra::ggRadar(data = CTQ[,c("CTQ_PhysicalNeglect", "CTQ_PhysicalAbuse", "CTQ_SexualAbuse", "CTQ_EmotionalAbuse", "CTQ_EmotionalNeglect", "pruned")], aes(colour = pruned, fill = pruned), rescale = F, use.label = T, ylim = c(5,25), axis.label.size = 3, grid.label.size = 3, size = 1) + 
+  labs(colour = "") +
+scale_color_manual(values = c("Type 1" = col_blue,
+                              "Type 2" = col_orange,
+                              "Type 3" = "red",
+                              "Type 4" = "purple",
+                              "Type 5" = col_green,
+                              "Type 6" = "pink",        # Add Type 6
+                              "Type 7" = "grey",
+                              "Type 8" = "brown")) +    # Add Type 8
+scale_fill_manual(values = c("Type 1" = col_blue,
+                             "Type 2" = col_orange,
+                             "Type 3" = "red",
+                             "Type 4" = "purple",
+                             "Type 5" = col_green,
+                             "Type 6" = "pink",        # Add Type 6
+                             "Type 7" = "grey",
+                             "Type 8" = "brown")) +    # Add Type 8
+  theme_bw() +
+  facet_grid(rows = vars(pruned)) +
+  scale_y_continuous(breaks = c(5, 10, 15, 20, 25), labels = c("5", "", "15", "", "25")) +
+  theme(legend.position = "none", axis.text.x = element_blank()) 
+```
+```{r}
+# After creating the plot object, display it:
+radar_traumatype
+# or
+print(radar_traumatype)
+```
+```{r}
+df$cluster <- CTQ$pruned
+```
+
+```{r}
+head(df)
+```
+
+
+```{r}
+# Load required libraries
+library(dplyr)
+library(dynamicTreeCut)
+
+# Check the structure of your dataframe
+str(df)
+
+# Create an empty Cluster column
+df$Cluster <- NA
+
+# For Cohort 1
+cohort1 <- df %>% filter(Cohort == 1)
+if(nrow(cohort1) > 0) {
+  # Select only the CTQ columns (using the NEW renamed columns) and remove missing values
+  ctq_data1 <- cohort1 %>% 
+    select(CTQ_EmotionalAbuse, CTQ_PhysicalAbuse, CTQ_SexualAbuse, 
+           CTQ_EmotionalNeglect, CTQ_PhysicalNeglect) %>%
+    na.omit()
+  
+  if(nrow(ctq_data1) > 1) {  # Need at least 2 observations for clustering
+    # Perform hierarchical clustering
+    dt1 <- dist(ctq_data1, method = "euclidean")
+    clust1 <- hclust(dt1, method = "ward.D2")
+    
+    # Dynamic tree cutting
+    clusters1 <- dynamicTreeCut::cutreeDynamic(clust1, 
+                                               distM = as.matrix(dt1), 
+                                               method = "hybrid", 
+                                               minClusterSize = 1)
+    
+    # Get the row indices that weren't removed by na.omit
+    complete_rows1 <- complete.cases(cohort1[, c("CTQ_EmotionalAbuse", "CTQ_PhysicalAbuse", 
+                                                 "CTQ_SexualAbuse", "CTQ_EmotionalNeglect", 
+                                                 "CTQ_PhysicalNeglect")])
+    cohort1_ids <- which(df$Cohort == 1)[complete_rows1]
+    
+    # Assign cluster labels to the original dataframe
+    df$Cluster[cohort1_ids] <- clusters1
+  }
+}
+
+# For Cohort 2
+cohort2 <- df %>% filter(Cohort == 2)
+if(nrow(cohort2) > 0) {
+  # Select only the CTQ columns (using the NEW renamed columns) and remove missing values
+  ctq_data2 <- cohort2 %>% 
+    select(CTQ_EmotionalAbuse, CTQ_PhysicalAbuse, CTQ_SexualAbuse, 
+           CTQ_EmotionalNeglect, CTQ_PhysicalNeglect) %>%
+    na.omit()
+  
+  if(nrow(ctq_data2) > 1) {  # Need at least 2 observations for clustering
+    # Perform hierarchical clustering
+    dt2 <- dist(ctq_data2, method = "euclidean")
+    clust2 <- hclust(dt2, method = "ward.D2")
+    
+    # Dynamic tree cutting
+    clusters2 <- dynamicTreeCut::cutreeDynamic(clust2, 
+                                               distM = as.matrix(dt2), 
+                                               method = "hybrid", 
+                                               minClusterSize = 1)
+    
+    # Get the row indices that weren't removed by na.omit
+    complete_rows2 <- complete.cases(cohort2[, c("CTQ_EmotionalAbuse", "CTQ_PhysicalAbuse", 
+                                                 "CTQ_SexualAbuse", "CTQ_EmotionalNeglect", 
+                                                 "CTQ_PhysicalNeglect")])
+    cohort2_ids <- which(df$Cohort == 2)[complete_rows2]
+    
+    # Assign cluster labels to the original dataframe
+    df$Cluster[cohort2_ids] <- clusters2
+  }
+}
+
+# View the results
+head(df)
+table(df$Cluster, df$Cohort, useNA = "always")
+
+# Examine the clusters for Cohort 1
+if(exists("clusters1")) {
+  print("Cluster distribution for Cohort 1:")
+  print(table(clusters1))
+  
+  # Calculate cluster centers (means)
+  print("Cluster centers for Cohort 1:")
+  cluster_centers1 <- aggregate(ctq_data1, by = list(Cluster = clusters1), FUN = mean)
+  print(cluster_centers1)
+}
+
+# Examine the clusters for Cohort 2
+if(exists("clusters2")) {
+  print("Cluster distribution for Cohort 2:")
+  print(table(clusters2))
+  
+  # Calculate cluster centers (means)
+  print("Cluster centers for Cohort 2:")
+  cluster_centers2 <- aggregate(ctq_data2, by = list(Cluster = clusters2), FUN = mean)
+  print(cluster_centers2)
+}
+```
+
+```{r}
+library(ggplot2)
+library(ggiraphExtra)
+
+# Define colors (make sure these are defined)
+col_blue <- "#0072B2"
+col_orange <- "#E69F00" 
+col_green <- "#009E73"
+
+# Create factor labels for clusters
+df$Cluster_Type <- factor(df$Cluster)
+levels(df$Cluster_Type) <- paste("Type", levels(df$Cluster_Type))
+
+# Radar plot for Cohort 1
+cohort1_data <- df %>% 
+  filter(Cohort == 1 & !is.na(Cluster)) %>%
+  select(CTQ_PhysicalNeglect, CTQ_PhysicalAbuse, CTQ_SexualAbuse, 
+         CTQ_EmotionalAbuse, CTQ_EmotionalNeglect, Cluster_Type)
+
+if(nrow(cohort1_data) > 0) {
+  radar_cohort1 <- ggiraphExtra::ggRadar(
+    data = cohort1_data, 
+    aes(colour = Cluster_Type, fill = Cluster_Type), 
+    rescale = F, 
+    use.label = T, 
+    ylim = c(5,25), 
+    axis.label.size = 3, 
+    grid.label.size = 3, 
+    size = 1) + 
+    labs(title = "Trauma Types - Cohort 1", colour = "") +
+    scale_color_manual(values = c("Type 1" = col_blue,
+                                  "Type 2" = col_orange,
+                                  "Type 3" = "red",
+                                  "Type 4" = "purple",
+                                  "Type 5" = col_green,
+                                  "Type 6" = "pink",
+                                  "Type 7" = "grey",
+                                  "Type 8" = "brown")) +
+    scale_fill_manual(values = c("Type 1" = col_blue,
+                                 "Type 2" = col_orange,
+                                 "Type 3" = "red",
+                                 "Type 4" = "purple",
+                                 "Type 5" = col_green,
+                                 "Type 6" = "pink",
+                                 "Type 7" = "grey",
+                                 "Type 8" = "brown")) +
+    theme_bw() +
+    facet_grid(rows = vars(Cluster_Type)) +
+    scale_y_continuous(breaks = c(5, 10, 15, 20, 25), 
+                       labels = c("5", "", "15", "", "25")) +
+    theme(legend.position = "none", axis.text.x = element_blank())
+  
+  print(radar_cohort1)
+}
+
+# Radar plot for Cohort 2
+cohort2_data <- df %>% 
+  filter(Cohort == 2 & !is.na(Cluster)) %>%
+  select(CTQ_PhysicalNeglect, CTQ_PhysicalAbuse, CTQ_SexualAbuse, 
+         CTQ_EmotionalAbuse, CTQ_EmotionalNeglect, Cluster_Type)
+
+if(nrow(cohort2_data) > 0) {
+  radar_cohort2 <- ggiraphExtra::ggRadar(
+    data = cohort2_data, 
+    aes(colour = Cluster_Type, fill = Cluster_Type), 
+    rescale = F, 
+    use.label = T, 
+    ylim = c(5,25), 
+    axis.label.size = 3, 
+    grid.label.size = 3, 
+    size = 1) + 
+    labs(title = "Trauma Types - Cohort 2", colour = "") +
+    scale_color_manual(values = c("Type 1" = col_blue,
+                                  "Type 2" = col_orange,
+                                  "Type 3" = "red",
+                                  "Type 4" = "purple",
+                                  "Type 5" = col_green,
+                                  "Type 6" = "pink",
+                                  "Type 7" = "grey",
+                                  "Type 8" = "brown")) +
+    scale_fill_manual(values = c("Type 1" = col_blue,
+                                 "Type 2" = col_orange,
+                                 "Type 3" = "red",
+                                 "Type 4" = "purple",
+                                 "Type 5" = col_green,
+                                 "Type 6" = "pink",
+                                 "Type 7" = "grey",
+                                 "Type 8" = "brown")) +
+    theme_bw() +
+    facet_grid(rows = vars(Cluster_Type)) +
+    scale_y_continuous(breaks = c(5, 10, 15, 20, 25), 
+                       labels = c("5", "", "15", "", "25")) +
+    theme(legend.position = "none", axis.text.x = element_blank())
+  
+  print(radar_cohort2)
+}
+
+# Optional: Check how many clusters each cohort has
+print("Cluster distribution by cohort:")
+table(df$Cluster, df$Cohort, useNA = "always")
+```

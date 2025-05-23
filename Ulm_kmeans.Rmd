@@ -1,0 +1,1121 @@
+
+```{r}
+
+# Load a CSV file in R Markdown
+df <- read.csv(r"(C:\Forschung\ctq\Ulm\Ulm_merged_CTQ.csv)")
+
+# Look at the first few rows to verify it loaded correctly
+head(df)
+
+```
+```{r}
+# Load required libraries
+library(dplyr)
+library(stats) # For kmeans
+
+# Assuming your data is already loaded as 'df'
+# If not, load it first:
+# df <- read.csv("path/to/your/file.csv")
+
+# Check the structure of your dataframe
+str(df)
+
+# Separate clustering for each cohort
+# First, create an empty Cluster column
+df$Cluster <- NA
+
+# For Cohort 1
+cohort1 <- df %>% filter(Cohort == 1)
+if(nrow(cohort1) > 0) {
+  # Select only the CTQ columns for clustering
+  ctq_cols <- cohort1 %>% select(CTQ_EM, CTQ_KM, CTQ_SM, CTQ_EV, CTQ_KV)
+  
+  # Perform k-means with 4 clusters
+  set.seed(123) # For reproducibility
+  kmeans_result1 <- kmeans(ctq_cols, centers = 4)
+  
+  # Assign cluster labels to the original dataframe
+  df$Cluster[df$Cohort == 1] <- kmeans_result1$cluster
+}
+
+# For Cohort 2
+cohort2 <- df %>% filter(Cohort == 2)
+if(nrow(cohort2) > 0) {
+  # Select only the CTQ columns for clustering
+  ctq_cols <- cohort2 %>% select(CTQ_EM, CTQ_KM, CTQ_SM, CTQ_EV, CTQ_KV)
+  
+  # Perform k-means with 4 clusters
+  set.seed(123) # For reproducibility
+  kmeans_result2 <- kmeans(ctq_cols, centers = 4)
+  
+  # Assign cluster labels to the original dataframe
+  df$Cluster[df$Cohort == 2] <- kmeans_result2$cluster
+}
+
+# View the results
+head(df)
+
+# Optional: examine the clusters for Cohort 1
+if(exists("kmeans_result1")) {
+  # Get cluster centers
+  print("Cluster centers for Cohort 1:")
+  print(kmeans_result1$centers)
+  
+  # Check the distribution of clusters
+  print("Cluster distribution for Cohort 1:")
+  print(table(kmeans_result1$cluster))
+}
+
+# Optional: examine the clusters for Cohort 2
+if(exists("kmeans_result2")) {
+  # Get cluster centers
+  print("Cluster centers for Cohort 2:")
+  print(kmeans_result2$centers)
+  
+  # Check the distribution of clusters
+  print("Cluster distribution for Cohort 2:")
+  print(table(kmeans_result2$cluster))
+}
+```
+
+```{r}
+head(df)
+```
+
+
+```{r}
+
+# Manual reassignment of cluster values
+# Create a copy of the dataframe to keep the original intact
+df_reassigned <- df
+
+# For Cohort 2: Change 3 to 4, and 4 to 3
+df_reassigned$Cluster[df_reassigned$Cohort == 2 & df_reassigned$Cluster == 3] <- 999  # Temporary value
+df_reassigned$Cluster[df_reassigned$Cohort == 2 & df_reassigned$Cluster == 4] <- 3
+df_reassigned$Cluster[df_reassigned$Cohort == 2 & df_reassigned$Cluster == 999] <- 4
+
+# For Cohort 1: Change 1 to 4, 3 to 1, and 4 to 3
+df_reassigned$Cluster[df_reassigned$Cohort == 1 & df_reassigned$Cluster == 1] <- 999  # Temporary value
+df_reassigned$Cluster[df_reassigned$Cohort == 1 & df_reassigned$Cluster == 3] <- 888  # Temporary value
+df_reassigned$Cluster[df_reassigned$Cohort == 1 & df_reassigned$Cluster == 4] <- 3
+df_reassigned$Cluster[df_reassigned$Cohort == 1 & df_reassigned$Cluster == 999] <- 4
+df_reassigned$Cluster[df_reassigned$Cohort == 1 & df_reassigned$Cluster == 888] <- 1
+
+# Verify the reassignment
+print("New cluster distribution after manual reassignment:")
+print(table(df_reassigned$Cohort, df_reassigned$Cluster))
+
+# Calculate new cluster centers based on the reassigned labels
+# For Cohort 1
+new_centers1 <- matrix(0, nrow = 4, ncol = 5)
+colnames(new_centers1) <- c("CTQ_EM", "CTQ_KM", "CTQ_SM", "CTQ_EV", "CTQ_KV")
+for (i in 1:4) {
+  cluster_data <- df_reassigned %>% 
+    filter(Cohort == 1, Cluster == i) %>%
+    select(CTQ_EM, CTQ_KM, CTQ_SM, CTQ_EV, CTQ_KV)
+  
+  if (nrow(cluster_data) > 0) {
+    new_centers1[i,] <- colMeans(cluster_data)
+  }
+}
+
+# For Cohort 2
+new_centers2 <- matrix(0, nrow = 4, ncol = 5)
+colnames(new_centers2) <- c("CTQ_EM", "CTQ_KM", "CTQ_SM", "CTQ_EV", "CTQ_KV")
+for (i in 1:4) {
+  cluster_data <- df_reassigned %>% 
+    filter(Cohort == 2, Cluster == i) %>%
+    select(CTQ_EM, CTQ_KM, CTQ_SM, CTQ_EV, CTQ_KV)
+  
+  if (nrow(cluster_data) > 0) {
+    new_centers2[i,] <- colMeans(cluster_data)
+  }
+}
+
+# Check the total scores
+print("Total CTQ scores after reassignment (Cohort 1):")
+print(rowSums(new_centers1))
+print("Total CTQ scores after reassignment (Cohort 2):")
+print(rowSums(new_centers2))
+
+# Create radar plots with the reassigned clusters
+create_radar_plot <- function(centers, cohort_number) {
+  # Map CTQ variable names to descriptive labels
+  var_labels <- c(
+    "CTQ_EV" = "Emotional neglect",
+    "CTQ_KV" = "Physical neglect",
+    "CTQ_KM" = "Physical abuse",
+    "CTQ_SM" = "Sexual abuse",
+    "CTQ_EM" = "Emotional abuse"
+  )
+  
+  # Define the order of variables to go around the circle
+  var_order <- c("CTQ_KV", "CTQ_KM", "CTQ_EV", "CTQ_SM", "CTQ_EM")
+  
+  # Calculate angles for equal spacing around the circle
+  angles <- seq(pi/2, -3*pi/2, length.out = length(var_order) + 1)[1:length(var_order)]
+  
+  # Set up plot
+  par(mar = c(2, 2, 3, 2))  # Adjust margins
+  plot(0, 0, type = "n", xlim = c(-1.2, 1.2), ylim = c(-1.2, 1.2),
+       xlab = "", ylab = "", main = paste("Cohort", cohort_number),
+       axes = FALSE)
+  
+  # Draw radar grid circles
+  for (i in seq(0.2, 1, 0.2)) {
+    points <- NULL
+    for (j in 1:length(angles)) {
+      points <- rbind(points, c(i * sin(angles[j]), i * cos(angles[j])))
+    }
+    # Close the circle
+    points <- rbind(points, points[1,])
+    lines(points[,1], points[,2], col = "lightgray", lty = 2)
+  }
+  
+  # Draw connecting lines between points on the grid
+  for (i in 1:length(angles)) {
+    arrows(0, 0, sin(angles[i]), cos(angles[i]), length = 0)
+    
+    # Position labels around the circle
+    text(1.1 * sin(angles[i]), 1.1 * cos(angles[i]), 
+         labels = var_labels[var_order[i]], 
+         cex = 0.8,
+         xpd = TRUE)
+  }
+  
+  # Set colors for clusters
+  colors <- c("#00FF00", "#FFFF00", "#00FFFF", "#FF0000")  # Green, Yellow, Cyan, Red
+  
+  # Scale the data for better visualization
+  centers_normalized <- centers
+  for (j in 1:ncol(centers)) {
+    min_val <- min(centers[, j])
+    max_val <- max(centers[, j])
+    if (max_val > min_val) {  # Avoid division by zero
+      centers_normalized[, j] <- (centers[, j] - min_val) / (max_val - min_val)
+    } else {
+      centers_normalized[, j] <- 0.5  # Default if all values are the same
+    }
+  }
+  
+  # Draw polygons for each cluster
+  for (i in 1:nrow(centers)) {
+    polygon_points <- NULL
+    for (j in 1:length(var_order)) {
+      var <- var_order[j]
+      val <- centers_normalized[i, var]
+      polygon_points <- rbind(polygon_points, 
+                             c(val * sin(angles[j]), val * cos(angles[j])))
+    }
+    # Close the polygon
+    polygon_points <- rbind(polygon_points, polygon_points[1,])
+    
+    # Draw the polygon
+    polygon(polygon_points[,1], polygon_points[,2], 
+            col = adjustcolor(colors[i], alpha.f = 0.3), 
+            border = colors[i], 
+            lwd = 2)
+  }
+  
+  # Add a legend
+  legend("topright", 
+         legend = paste("Cluster", 1:nrow(centers)), 
+         fill = adjustcolor(colors, alpha.f = 0.3),
+         border = colors,
+         bty = "n",
+         cex = 0.8)
+}
+
+# Display the radar plots with the reassigned clusters
+par(mfrow = c(1, 2))  # Set up a 1x2 plotting grid
+create_radar_plot(new_centers1, 1)
+create_radar_plot(new_centers2, 2)
+
+# Update the original dataframe if you want to save these changes
+df <- df_reassigned
+```
+```{r}
+# Create a copy of the dataframe to keep the original intact
+df_reassigned <- df
+
+# For Cohort 1: Swap Clusters 3 and 4
+df_reassigned$Cluster[df_reassigned$Cohort == 1 & df_reassigned$Cluster == 3] <- 999  # Temporary value
+df_reassigned$Cluster[df_reassigned$Cohort == 1 & df_reassigned$Cluster == 4] <- 3
+df_reassigned$Cluster[df_reassigned$Cohort == 1 & df_reassigned$Cluster == 999] <- 4
+
+# No changes needed for Cohort 2 based on the heatmap
+
+# Verify the reassignment
+print("New cluster distribution after manual reassignment:")
+print(table(df_reassigned$Cohort, df_reassigned$Cluster))
+
+# Update the original dataframe with the reassigned values
+df <- df_reassigned
+
+```
+
+
+```{r}
+# Load required libraries
+library(dplyr)
+library(stats)
+library(mclust)  # For adjustedRandIndex
+
+# Assuming you already have:
+# - kmeans_result1 and kmeans_result2 with your cluster centers
+# - df with your data and a Cluster column (already reassigned if needed)
+
+# Step 1: Extract the cluster centers for both cohorts
+centers1 <- kmeans_result1$centers
+centers2 <- kmeans_result2$centers
+
+# Step 2: Get data points for each cohort
+ctq_cols <- c("CTQ_EM", "CTQ_KM", "CTQ_SM", "CTQ_EV", "CTQ_KV")
+cohort1_data <- df %>% filter(Cohort == 1) %>% select(all_of(ctq_cols))
+cohort2_data <- df %>% filter(Cohort == 2) %>% select(all_of(ctq_cols))
+
+# Step 3: Get the original cluster labels
+cohort1_labels <- df %>% filter(Cohort == 1) %>% pull(Cluster)
+cohort2_labels <- df %>% filter(Cohort == 2) %>% pull(Cluster)
+
+# Step 4: Calculate distances and assign points from Cohort 2 to nearest Cohort 1 centroid
+# Calculate distances between Cohort 2 data points and Cohort 1 centers
+assigned_from_1_to_2 <- numeric(nrow(cohort2_data))
+for (i in 1:nrow(cohort2_data)) {
+  point <- as.numeric(cohort2_data[i, ])
+  distances <- apply(centers1, 1, function(center) {
+    sqrt(sum((center - point)^2))  # Euclidean distance
+  })
+  assigned_from_1_to_2[i] <- which.min(distances)
+}
+
+# Step 5: Calculate distances and assign points from Cohort 1 to nearest Cohort 2 centroid
+assigned_from_2_to_1 <- numeric(nrow(cohort1_data))
+for (i in 1:nrow(cohort1_data)) {
+  point <- as.numeric(cohort1_data[i, ])
+  distances <- apply(centers2, 1, function(center) {
+    sqrt(sum((center - point)^2))  # Euclidean distance
+  })
+  assigned_from_2_to_1[i] <- which.min(distances)
+}
+
+# Step 6: Calculate Adjusted Rand Index for both directions
+ari_1_to_2 <- adjustedRandIndex(assigned_from_1_to_2, cohort2_labels)
+ari_2_to_1 <- adjustedRandIndex(assigned_from_2_to_1, cohort1_labels)
+
+print("Adjusted Rand Index when using Cohort 1 centers to label Cohort 2:")
+print(ari_1_to_2)
+print("Adjusted Rand Index when using Cohort 2 centers to label Cohort 1:")
+print(ari_2_to_1)
+
+# Step 7: Create a cross-tabulation to visualize the overlaps
+# For Cohort 2 data labeled using Cohort 1 centers
+print("Cross-tabulation of Cohort 2 labels vs. assignments based on Cohort 1 centers:")
+print(table(cohort2_labels, assigned_from_1_to_2))
+
+# For Cohort 1 data labeled using Cohort 2 centers
+print("Cross-tabulation of Cohort 1 labels vs. assignments based on Cohort 2 centers:")
+print(table(cohort1_labels, assigned_from_2_to_1))
+
+# Step 8: Visualize the agreement between clusterings using heatmaps
+# This requires the pheatmap package
+if (!require(pheatmap)) {
+  install.packages("pheatmap")
+  library(pheatmap)
+}
+
+# Create normalized contingency tables
+contingency_1_to_2 <- table(cohort2_labels, assigned_from_1_to_2)
+contingency_2_to_1 <- table(cohort1_labels, assigned_from_2_to_1)
+
+# Normalize by row sums to get proportions
+norm_contingency_1_to_2 <- sweep(contingency_1_to_2, 1, rowSums(contingency_1_to_2), "/")
+norm_contingency_2_to_1 <- sweep(contingency_2_to_1, 1, rowSums(contingency_2_to_1), "/")
+
+# Create heatmaps
+par(mfrow = c(1, 2))
+pheatmap(norm_contingency_1_to_2, 
+         main = "Cohort 2 clusters assigned to Cohort 1 centers",
+         display_numbers = TRUE,
+         number_format = "%.2f",
+         cluster_rows = FALSE, 
+         cluster_cols = FALSE)
+
+pheatmap(norm_contingency_2_to_1, 
+         main = "Cohort 1 clusters assigned to Cohort 2 centers",
+         display_numbers = TRUE,
+         number_format = "%.2f",
+         cluster_rows = FALSE, 
+         cluster_cols = FALSE)
+
+# Step 9: Visualize both clusterings together using a scatter plot for two selected variables
+# Choose two of the CTQ variables to plot
+selected_vars <- c("CTQ_EM", "CTQ_EV")  # Change these to the variables you're most interested in
+
+# Create a combined dataframe for plotting
+plot_df <- rbind(
+  data.frame(
+    Cohort = rep("Cohort 1", nrow(cohort1_data)),
+    Original_Cluster = cohort1_labels,
+    Assigned_Cluster = assigned_from_2_to_1,
+    cohort1_data[, selected_vars]
+  ),
+  data.frame(
+    Cohort = rep("Cohort 2", nrow(cohort2_data)),
+    Original_Cluster = cohort2_labels,
+    Assigned_Cluster = assigned_from_1_to_2,
+    cohort2_data[, selected_vars]
+  )
+)
+
+# Plot using ggplot2
+if (!require(ggplot2)) {
+  install.packages("ggplot2")
+  library(ggplot2)
+}
+
+# Plot original clusters
+ggplot(plot_df, aes_string(x = selected_vars[1], y = selected_vars[2], 
+                           color = "factor(Original_Cluster)")) +
+  geom_point(alpha = 0.5) +
+  facet_wrap(~ Cohort) +
+  labs(title = "Original clusters by cohort",
+       color = "Cluster") +
+  theme_minimal()
+
+# Plot assigned clusters (to see how well the other cohort's centers classify)
+ggplot(plot_df, aes_string(x = selected_vars[1], y = selected_vars[2], 
+                           color = "factor(Assigned_Cluster)")) +
+  geom_point(alpha = 0.5) +
+  facet_wrap(~ Cohort) +
+  labs(title = "Assigned clusters using other cohort's centers",
+       color = "Cluster") +
+  theme_minimal()
+
+# Step 10: Calculate some additional metrics to quantify the agreement
+# Calculate percentage of points that would be assigned to the same cluster
+cohort1_agreement <- mean(cohort1_labels == assigned_from_2_to_1)
+cohort2_agreement <- mean(cohort2_labels == assigned_from_1_to_2)
+
+print("Percentage of Cohort 1 points assigned to the same cluster by Cohort 2 centers:")
+print(cohort1_agreement * 100)
+print("Percentage of Cohort 2 points assigned to the same cluster by Cohort 1 centers:")
+print(cohort2_agreement * 100)
+```
+
+```{r}
+# Print the current cluster distribution in df
+print(table(df$Cohort, df$Cluster))
+```
+```{r}
+# Calculate means of CTQ columns by cluster and cohort
+library(dplyr)
+
+# List of CTQ columns
+ctq_cols <- c("CTQ_EM", "CTQ_KM", "CTQ_SM", "CTQ_EV", "CTQ_KV")
+
+# For Cohort 1
+cohort1_means <- df %>%
+  filter(Cohort == 1) %>%
+  group_by(Cluster) %>%
+  summarise(across(all_of(ctq_cols), mean), 
+            Total_CTQ = sum(c_across(all_of(ctq_cols))),
+            Count = n()) %>%
+  arrange(Cluster)
+
+# For Cohort 2
+cohort2_means <- df %>%
+  filter(Cohort == 2) %>%
+  group_by(Cluster) %>%
+  summarise(across(all_of(ctq_cols), mean), 
+            Total_CTQ = sum(c_across(all_of(ctq_cols))),
+            Count = n()) %>%
+  arrange(Cluster)
+
+# Print the results
+print("Means of CTQ columns by cluster for Cohort 1:")
+print(cohort1_means, digits = 2)
+
+print("Means of CTQ columns by cluster for Cohort 2:")
+print(cohort2_means, digits = 2)
+
+# Create a more formatted table for better readability
+library(knitr)
+
+# Function to format a table with better column names
+format_table <- function(df, cohort_num) {
+  # Rename the columns for clarity
+  colnames(df) <- c("Cluster", 
+                    "Emotional Abuse", 
+                    "Physical Abuse", 
+                    "Sexual Abuse", 
+                    "Emotional Neglect", 
+                    "Physical Neglect",
+                    "Total Score",
+                    "Count")
+  
+  # Add a row with the cohort average
+  cohort_avg <- df %>%
+    summarise(Cluster = "Average",
+              across(c("Emotional Abuse", "Physical Abuse", "Sexual Abuse", 
+                      "Emotional Neglect", "Physical Neglect", "Total Score"), 
+                    ~weighted.mean(., Count)),
+              Count = sum(Count))
+  
+  # Combine the cluster data with the average
+  result <- rbind(df, cohort_avg)
+  
+  # Return the formatted table
+  return(kable(result, digits = 2, 
+               caption = paste("Cluster Means for Cohort", cohort_num),
+               format = "markdown"))
+}
+
+# Print formatted tables
+cat("\nFormatted table for Cohort 1:\n")
+print(format_table(cohort1_means, 1))
+
+cat("\nFormatted table for Cohort 2:\n")
+print(format_table(cohort2_means, 2))
+
+# Create a visual comparison
+# Bar chart of mean CTQ scores by cluster and cohort
+if (!require(ggplot2)) {
+  install.packages("ggplot2")
+  library(ggplot2)
+}
+if (!require(tidyr)) {
+  install.packages("tidyr")
+  library(tidyr)
+}
+
+# Prepare data for plotting
+cohort1_long <- cohort1_means %>%
+  select(-Total_CTQ, -Count) %>%
+  pivot_longer(cols = all_of(ctq_cols), 
+               names_to = "CTQ_Type", 
+               values_to = "Score") %>%
+  mutate(Cohort = "Cohort 1")
+
+cohort2_long <- cohort2_means %>%
+  select(-Total_CTQ, -Count) %>%
+  pivot_longer(cols = all_of(ctq_cols), 
+               names_to = "CTQ_Type", 
+               values_to = "Score") %>%
+  mutate(Cohort = "Cohort 2")
+
+combined_long <- rbind(cohort1_long, cohort2_long)
+
+# Create better labels for CTQ types
+combined_long$CTQ_Type <- factor(combined_long$CTQ_Type,
+                                 levels = ctq_cols,
+                                 labels = c("Emotional Abuse", 
+                                            "Physical Abuse", 
+                                            "Sexual Abuse", 
+                                            "Emotional Neglect", 
+                                            "Physical Neglect"))
+
+# Create the bar chart
+ggplot(combined_long, aes(x = CTQ_Type, y = Score, fill = factor(Cluster))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ Cohort) +
+  labs(title = "Mean CTQ Scores by Cluster and Cohort",
+       x = "CTQ Type",
+       y = "Mean Score",
+       fill = "Cluster") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Create a heatmap for better visualization of the patterns
+# Prepare data for heatmap
+cohort1_matrix <- as.matrix(cohort1_means[, ctq_cols])
+rownames(cohort1_matrix) <- paste("C1: Cluster", cohort1_means$Cluster)
+
+cohort2_matrix <- as.matrix(cohort2_means[, ctq_cols])
+rownames(cohort2_matrix) <- paste("C2: Cluster", cohort2_means$Cluster)
+
+combined_matrix <- rbind(cohort1_matrix, cohort2_matrix)
+colnames(combined_matrix) <- c("Emotional Abuse", 
+                               "Physical Abuse", 
+                               "Sexual Abuse", 
+                               "Emotional Neglect", 
+                               "Physical Neglect")
+
+# Create heatmap
+if (!require(pheatmap)) {
+  install.packages("pheatmap")
+  library(pheatmap)
+}
+
+pheatmap(combined_matrix,
+         main = "CTQ Scores by Cluster and Cohort",
+         display_numbers = TRUE,
+         number_format = "%.1f",
+         cluster_rows = FALSE,
+         cluster_cols = FALSE,
+         fontsize_number = 8)
+```
+
+```{r}
+# Manual implementation of Normalized Mutual Information (NMI)
+calculate_nmi <- function(x, y) {
+  # Create contingency table
+  cont_table <- table(x, y)
+  
+  # Calculate entropy for x
+  px <- rowSums(cont_table) / sum(cont_table)
+  H_x <- -sum(px * log(px))
+  
+  # Calculate entropy for y
+  py <- colSums(cont_table) / sum(cont_table)
+  H_y <- -sum(py * log(py))
+  
+  # Calculate joint entropy
+  pxy <- cont_table / sum(cont_table)
+  pxy_nonzero <- pxy[pxy > 0]  # Remove zeros to avoid log(0)
+  H_xy <- -sum(pxy_nonzero * log(pxy_nonzero))
+  
+  # Calculate mutual information
+  MI <- H_x + H_y - H_xy
+  
+  # Normalize (use geometric mean for normalization)
+  NMI <- MI / sqrt(H_x * H_y)
+  
+  return(NMI)
+}
+
+# Load required libraries
+library(dplyr)
+
+# Assuming you already have:
+# - kmeans_result1 and kmeans_result2 with your cluster centers
+# - df with your data and a Cluster column (already reassigned if needed)
+
+# Step 1: Extract the cluster centers for both cohorts
+centers1 <- kmeans_result1$centers
+centers2 <- kmeans_result2$centers
+
+# Step 2: Get data points for each cohort
+ctq_cols <- c("CTQ_EM", "CTQ_KM", "CTQ_SM", "CTQ_EV", "CTQ_KV")
+cohort1_data <- df %>% filter(Cohort == 1) %>% select(all_of(ctq_cols))
+cohort2_data <- df %>% filter(Cohort == 2) %>% select(all_of(ctq_cols))
+
+# Step 3: Get the original cluster labels
+cohort1_labels <- df %>% filter(Cohort == 1) %>% pull(Cluster)
+cohort2_labels <- df %>% filter(Cohort == 2) %>% pull(Cluster)
+
+# Step 4: Calculate assignments from one cohort to another
+# Assign Cohort 2 points to nearest Cohort 1 center
+assigned_from_1_to_2 <- numeric(nrow(cohort2_data))
+for (i in 1:nrow(cohort2_data)) {
+  point <- as.numeric(cohort2_data[i, ])
+  distances <- apply(centers1, 1, function(center) {
+    sqrt(sum((center - point)^2))  # Euclidean distance
+  })
+  assigned_from_1_to_2[i] <- which.min(distances)
+}
+
+# Assign Cohort 1 points to nearest Cohort 2 center
+assigned_from_2_to_1 <- numeric(nrow(cohort1_data))
+for (i in 1:nrow(cohort1_data)) {
+  point <- as.numeric(cohort1_data[i, ])
+  distances <- apply(centers2, 1, function(center) {
+    sqrt(sum((center - point)^2))  # Euclidean distance
+  })
+  assigned_from_2_to_1[i] <- which.min(distances)
+}
+
+# Step 5: Calculate evaluation metrics
+# Calculate NMI (Normalized Mutual Information) using our custom function
+nmi_1_to_2 <- calculate_nmi(assigned_from_1_to_2, cohort2_labels)
+nmi_2_to_1 <- calculate_nmi(assigned_from_2_to_1, cohort1_labels)
+
+# Manual implementation of Adjusted Rand Index (ARI)
+calculate_ari <- function(x, y) {
+  # Create contingency table
+  cont_table <- table(x, y)
+  
+  # Calculate components for ARI formula
+  a <- sum(choose(cont_table, 2))  # Sum of (nij choose 2)
+  b <- sum(choose(rowSums(cont_table), 2))  # Sum of (ni. choose 2)
+  c <- sum(choose(colSums(cont_table), 2))  # Sum of (n.j choose 2)
+  d <- choose(sum(cont_table), 2)  # (n choose 2)
+  
+  # Calculate ARI
+  ARI <- (a - (b * c) / d) / (0.5 * (b + c) - (b * c) / d)
+  
+  return(ARI)
+}
+
+# Calculate ARI (Adjusted Rand Index) using our custom function
+ari_1_to_2 <- calculate_ari(assigned_from_1_to_2, cohort2_labels)
+ari_2_to_1 <- calculate_ari(assigned_from_2_to_1, cohort1_labels)
+
+# Print the results
+print("Cross-Cohort Clustering Validation Metrics:")
+print(paste("NMI when using Cohort 1 centers to label Cohort 2:", round(nmi_1_to_2, 3)))
+print(paste("NMI when using Cohort 2 centers to label Cohort 1:", round(nmi_2_to_1, 3)))
+print(paste("ARI when using Cohort 1 centers to label Cohort 2:", round(ari_1_to_2, 3)))
+print(paste("ARI when using Cohort 2 centers to label Cohort 1:", round(ari_2_to_1, 3)))
+
+# Create a summary table of all metrics
+metrics_df <- data.frame(
+  Direction = c("Cohort 1 → Cohort 2", "Cohort 2 → Cohort 1"),
+  NMI = c(nmi_1_to_2, nmi_2_to_1),
+  ARI = c(ari_1_to_2, ari_2_to_1)
+)
+
+print("Summary of clustering comparison metrics:")
+print(metrics_df)
+
+# Create a visual comparison of the metrics if ggplot2 is available
+if (require(ggplot2)) {
+  if (require(tidyr)) {
+    metrics_long <- tidyr::pivot_longer(metrics_df, 
+                                      cols = c("NMI", "ARI"),
+                                      names_to = "Metric", 
+                                      values_to = "Value")
+    
+    ggplot(metrics_long, aes(x = Direction, y = Value, fill = Metric)) +
+      geom_bar(stat = "identity", position = "dodge") +
+      labs(title = "Cross-Cohort Clustering Validation Metrics",
+           x = "Direction of Comparison",
+           y = "Metric Value") +
+      theme_minimal() +
+      scale_y_continuous(limits = c(0, 1)) +
+      geom_text(aes(label = round(Value, 2)), 
+                position = position_dodge(width = 0.9), 
+                vjust = -0.5)
+  } else {
+    # Create a basic barplot if tidyr is not available
+    barplot(as.matrix(metrics_df[, c("NMI", "ARI")]), 
+            beside = TRUE,
+            names.arg = metrics_df$Direction,
+            main = "Cross-Cohort Clustering Validation Metrics",
+            ylab = "Metric Value",
+            ylim = c(0, 1),
+            col = c("blue", "red"))
+    legend("topright", 
+           legend = c("NMI", "ARI"),
+           fill = c("blue", "red"))
+  }
+} else {
+  # Create a simple text-based visualization if ggplot2 is not available
+  cat("\nMetric values (higher is better, max = 1):\n")
+  cat(paste(rep("-", 50), collapse = ""), "\n")
+  cat(sprintf("%-20s %-15s %-15s\n", "Direction", "NMI", "ARI"))
+  cat(paste(rep("-", 50), collapse = ""), "\n")
+  cat(sprintf("%-20s %-15.3f %-15.3f\n", 
+              "Cohort 1 → Cohort 2", nmi_1_to_2, ari_1_to_2))
+  cat(sprintf("%-20s %-15.3f %-15.3f\n", 
+              "Cohort 2 → Cohort 1", nmi_2_to_1, ari_2_to_1))
+  cat(paste(rep("-", 50), collapse = ""), "\n")
+}
+```
+
+
+```{r}
+# Extract cluster assignments for each cohort
+cohort1_clusters <- df$Cluster[df$Cohort == 1]
+cohort2_clusters <- df$Cluster[df$Cohort == 2]
+
+# Extract the CTQ features for each cohort
+cohort1_features <- df[df$Cohort == 1, c("CTQ_EM", "CTQ_KM", "CTQ_SM", "CTQ_EV", "CTQ_KV")]
+cohort2_features <- df[df$Cohort == 2, c("CTQ_EM", "CTQ_KM", "CTQ_SM", "CTQ_EV", "CTQ_KV")]
+
+# Load required libraries
+library(dplyr)
+
+# Extract cluster assignments and features for each cohort
+cohort1_clusters <- df$Cluster[df$Cohort == 1]
+cohort2_clusters <- df$Cluster[df$Cohort == 2]
+
+cohort1_features <- df[df$Cohort == 1, c("CTQ_EM", "CTQ_KM", "CTQ_SM", "CTQ_EV", "CTQ_KV")]
+cohort2_features <- df[df$Cohort == 2, c("CTQ_EM", "CTQ_KM", "CTQ_SM", "CTQ_EV", "CTQ_KV")]
+
+# Create co-membership matrix for Cohort 1
+# This matrix indicates which patients are in the same cluster
+cohort1_comembership <- matrix(0, nrow = length(cohort1_clusters), ncol = length(cohort1_clusters))
+for (i in 1:length(cohort1_clusters)) {
+  for (j in 1:length(cohort1_clusters)) {
+    if (cohort1_clusters[i] == cohort1_clusters[j]) {
+      cohort1_comembership[i, j] <- 1
+    }
+  }
+}
+
+# For each patient in Cohort 2, find their nearest neighbor in Cohort 1
+nearest_neighbors <- numeric(length(cohort2_clusters))
+for (i in 1:length(cohort2_clusters)) {
+  distances <- apply(cohort1_features, 1, function(x) {
+    sqrt(sum((x - as.numeric(cohort2_features[i, ]))^2))
+  })
+  nearest_neighbors[i] <- which.min(distances)
+}
+
+# Calculate prediction strength for each cluster in Cohort 2
+unique_clusters <- unique(cohort2_clusters)
+cluster_ps <- numeric(length(unique_clusters))
+names(cluster_ps) <- unique_clusters
+
+for (c in 1:length(unique_clusters)) {
+  cluster <- unique_clusters[c]
+  # Get indices of patients in this cluster
+  cluster_indices <- which(cohort2_clusters == cluster)
+  
+  if (length(cluster_indices) <= 1) {
+    cluster_ps[c] <- 1  # Singleton clusters have perfect prediction strength
+    next
+  }
+  
+  # Count pairs that maintain co-membership
+  n_pairs <- choose(length(cluster_indices), 2)
+  preserved_pairs <- 0
+  
+  for (i in 1:(length(cluster_indices) - 1)) {
+    for (j in (i + 1):length(cluster_indices)) {
+      idx_i <- cluster_indices[i]
+      idx_j <- cluster_indices[j]
+      nn_i <- nearest_neighbors[idx_i]
+      nn_j <- nearest_neighbors[idx_j]
+      
+      # Check if nearest neighbors are in the same cluster in Cohort 1
+      if (cohort1_comembership[nn_i, nn_j] == 1) {
+        preserved_pairs <- preserved_pairs + 1
+      }
+    }
+  }
+  
+  # Calculate prediction strength for this cluster
+  cluster_ps[c] <- preserved_pairs / n_pairs
+}
+
+# Overall prediction strength
+prediction_strength <- min(cluster_ps)
+
+# Print results
+print("Prediction Strength for each cluster in Cohort 2:")
+for (i in 1:length(unique_clusters)) {
+  print(paste("Cluster", unique_clusters[i], ":", round(cluster_ps[i], 3)))
+}
+print(paste("Overall Prediction Strength:", round(prediction_strength, 3)))
+
+# We can also calculate prediction strength in the other direction
+# From Cohort 2 to Cohort 1
+cohort2_comembership <- matrix(0, nrow = length(cohort2_clusters), ncol = length(cohort2_clusters))
+for (i in 1:length(cohort2_clusters)) {
+  for (j in 1:length(cohort2_clusters)) {
+    if (cohort2_clusters[i] == cohort2_clusters[j]) {
+      cohort2_comembership[i, j] <- 1
+    }
+  }
+}
+
+# For each patient in Cohort 1, find their nearest neighbor in Cohort 2
+nearest_neighbors_reverse <- numeric(length(cohort1_clusters))
+for (i in 1:length(cohort1_clusters)) {
+  distances <- apply(cohort2_features, 1, function(x) {
+    sqrt(sum((x - as.numeric(cohort1_features[i, ]))^2))
+  })
+  nearest_neighbors_reverse[i] <- which.min(distances)
+}
+
+# Calculate prediction strength for each cluster in Cohort 1
+unique_clusters_1 <- unique(cohort1_clusters)
+cluster_ps_reverse <- numeric(length(unique_clusters_1))
+names(cluster_ps_reverse) <- unique_clusters_1
+
+for (c in 1:length(unique_clusters_1)) {
+  cluster <- unique_clusters_1[c]
+  # Get indices of patients in this cluster
+  cluster_indices <- which(cohort1_clusters == cluster)
+  
+  if (length(cluster_indices) <= 1) {
+    cluster_ps_reverse[c] <- 1  # Singleton clusters have perfect prediction strength
+    next
+  }
+  
+  # Count pairs that maintain co-membership
+  n_pairs <- choose(length(cluster_indices), 2)
+  preserved_pairs <- 0
+  
+  for (i in 1:(length(cluster_indices) - 1)) {
+    for (j in (i + 1):length(cluster_indices)) {
+      idx_i <- cluster_indices[i]
+      idx_j <- cluster_indices[j]
+      nn_i <- nearest_neighbors_reverse[idx_i]
+      nn_j <- nearest_neighbors_reverse[idx_j]
+      
+      # Check if nearest neighbors are in the same cluster in Cohort 2
+      if (cohort2_comembership[nn_i, nn_j] == 1) {
+        preserved_pairs <- preserved_pairs + 1
+      }
+    }
+  }
+  
+  # Calculate prediction strength for this cluster
+  cluster_ps_reverse[c] <- preserved_pairs / n_pairs
+}
+
+# Overall prediction strength in reverse direction
+prediction_strength_reverse <- min(cluster_ps_reverse)
+
+print("Prediction Strength for each cluster in Cohort 1:")
+for (i in 1:length(unique_clusters_1)) {
+  print(paste("Cluster", unique_clusters_1[i], ":", round(cluster_ps_reverse[i], 3)))
+}
+print(paste("Overall Prediction Strength (Cohort 2 → Cohort 1):", round(prediction_strength_reverse, 3)))
+
+# Calculate average prediction strength (bidirectional)
+avg_prediction_strength <- (prediction_strength + prediction_strength_reverse) / 2
+print(paste("Average Bidirectional Prediction Strength:", round(avg_prediction_strength, 3)))
+```
+
+```{r}
+# Load required libraries
+library(dplyr)
+library(mclust)  # For ARI calculation
+
+# Function to calculate NMI
+calculate_nmi <- function(x, y) {
+  # Create contingency table
+  cont_table <- table(x, y)
+  
+  # Calculate entropy for x
+  px <- rowSums(cont_table) / sum(cont_table)
+  px <- px[px > 0]  # Remove zeros
+  H_x <- -sum(px * log(px))
+  
+  # Calculate entropy for y
+  py <- colSums(cont_table) / sum(cont_table)
+  py <- py[py > 0]  # Remove zeros
+  H_y <- -sum(py * log(py))
+  
+  # Calculate joint entropy
+  pxy <- cont_table / sum(cont_table)
+  pxy_nonzero <- pxy[pxy > 0]  # Remove zeros
+  H_xy <- -sum(pxy_nonzero * log(pxy_nonzero))
+  
+  # Calculate mutual information
+  MI <- H_x + H_y - H_xy
+  
+  # Normalize
+  NMI <- MI / sqrt(H_x * H_y)
+  
+  return(NMI)
+}
+
+# Set seed for reproducibility
+set.seed(123)
+
+# Number of iterations
+n_iterations <- 1000
+
+# Prepare results storage
+results_cohort1 <- data.frame(
+  Iteration = 1:n_iterations,
+  ARI = numeric(n_iterations),
+  NMI = numeric(n_iterations)
+)
+
+results_cohort2 <- data.frame(
+  Iteration = 1:n_iterations,
+  ARI = numeric(n_iterations),
+  NMI = numeric(n_iterations)
+)
+
+# Store all feature data and original cluster assignments
+cohort1_data <- df %>% filter(Cohort == 1)
+cohort2_data <- df %>% filter(Cohort == 2)
+ctq_cols <- c("CTQ_EM", "CTQ_KM", "CTQ_SM", "CTQ_EV", "CTQ_KV")
+
+# Run the iterations
+for (i in 1:n_iterations) {
+  # Sample 30% from each cohort
+  cohort1_sample <- cohort1_data %>% 
+    sample_frac(0.5) %>%
+    mutate(orig_index = row_number())
+  
+  cohort2_sample <- cohort2_data %>% 
+    sample_frac(0.5) %>%
+    mutate(orig_index = row_number())
+  
+  # Store original cluster assignments
+  cohort1_orig_clusters <- cohort1_sample$Cluster
+  cohort2_orig_clusters <- cohort2_sample$Cluster
+  
+  # Combine samples for joint clustering
+  combined_sample <- bind_rows(
+    cohort1_sample %>% select(all_of(ctq_cols), orig_index, Cluster) %>% mutate(source_cohort = 1),
+    cohort2_sample %>% select(all_of(ctq_cols), orig_index, Cluster) %>% mutate(source_cohort = 2)
+  )
+  
+  # Perform k-means on the combined sample
+  set.seed(i * 100)  # Different seed for each iteration
+  kmeans_result <- kmeans(combined_sample[, ctq_cols], centers = 4)
+  combined_sample$new_cluster <- kmeans_result$cluster
+  
+  # Split back into cohorts
+  cohort1_clustered <- combined_sample %>% filter(source_cohort == 1)
+  cohort2_clustered <- combined_sample %>% filter(source_cohort == 2)
+  
+  # Calculate ARI and NMI for each cohort
+  results_cohort1$ARI[i] <- adjustedRandIndex(cohort1_orig_clusters, 
+                                             cohort1_clustered$new_cluster)
+  results_cohort1$NMI[i] <- calculate_nmi(cohort1_orig_clusters, 
+                                         cohort1_clustered$new_cluster)
+  
+  results_cohort2$ARI[i] <- adjustedRandIndex(cohort2_orig_clusters, 
+                                             cohort2_clustered$new_cluster)
+  results_cohort2$NMI[i] <- calculate_nmi(cohort2_orig_clusters, 
+                                         cohort2_clustered$new_cluster)
+}
+
+# Calculate summary statistics
+cohort1_summary <- data.frame(
+  Metric = c("ARI", "NMI"),
+  Mean = c(mean(results_cohort1$ARI), mean(results_cohort1$NMI)),
+  SD = c(sd(results_cohort1$ARI), sd(results_cohort1$NMI)),
+  Min = c(min(results_cohort1$ARI), min(results_cohort1$NMI)),
+  Max = c(max(results_cohort1$ARI), max(results_cohort1$NMI))
+)
+
+cohort2_summary <- data.frame(
+  Metric = c("ARI", "NMI"),
+  Mean = c(mean(results_cohort2$ARI), mean(results_cohort2$NMI)),
+  SD = c(sd(results_cohort2$ARI), sd(results_cohort2$NMI)),
+  Min = c(min(results_cohort2$ARI), min(results_cohort2$NMI)),
+  Max = c(max(results_cohort2$ARI), max(results_cohort2$NMI))
+)
+
+# Print results
+print("Results for Cohort 1 (comparing original clusters to mixed clustering):")
+print(cohort1_summary)
+print("Results for Cohort 2 (comparing original clusters to mixed clustering):")
+print(cohort2_summary)
+
+# Visualize results
+if (require(ggplot2)) {
+  # Convert results to long format
+  results_long <- rbind(
+    results_cohort1 %>% mutate(Cohort = "Cohort 1", ARI = round(ARI, 3), NMI = round(NMI, 3)),
+    results_cohort2 %>% mutate(Cohort = "Cohort 2", ARI = round(ARI, 3), NMI = round(NMI, 3))
+  )
+  
+  # Plot ARI across iterations
+  p1 <- ggplot(results_long, aes(x = Iteration, y = ARI, color = Cohort, group = Cohort)) +
+    geom_line() +
+    geom_point() +
+    labs(title = "ARI Across Iterations",
+         y = "Adjusted Rand Index") +
+    theme_minimal()
+  
+  # Plot NMI across iterations
+  p2 <- ggplot(results_long, aes(x = Iteration, y = NMI, color = Cohort, group = Cohort)) +
+    geom_line() +
+    geom_point() +
+    labs(title = "NMI Across Iterations",
+         y = "Normalized Mutual Information") +
+    theme_minimal()
+  
+  # Print plots
+  print(p1)
+  print(p2)
+}
+```
+
+```{r}
+# Calculate means and standard deviations of CTQ columns by cluster and cohort
+library(dplyr)
+library(tidyr)
+library(knitr)
+
+# List of CTQ columns
+ctq_cols <- c("CTQ_EM", "CTQ_KM", "CTQ_SM", "CTQ_EV", "CTQ_KV")
+
+# Create summary statistics
+cluster_summary <- df %>%
+  group_by(Cohort, Cluster) %>%
+  summarise(
+    N = n(),
+    EM_mean = mean(CTQ_EM),
+    EM_sd = sd(CTQ_EM),
+    KM_mean = mean(CTQ_KM),
+    KM_sd = sd(CTQ_KM),
+    SM_mean = mean(CTQ_SM),
+    SM_sd = sd(CTQ_SM),
+    EV_mean = mean(CTQ_EV),
+    EV_sd = sd(CTQ_EV),
+    KV_mean = mean(CTQ_KV),
+    KV_sd = sd(CTQ_KV),
+    Total_CTQ = EM_mean + KM_mean + SM_mean + EV_mean + KV_mean
+  ) %>%
+  arrange(Cohort, Total_CTQ)  # Sort by cohort and then by total CTQ score
+
+# Print the results in a more readable format
+print("Cluster characteristics by cohort - means (standard deviations):")
+
+for (cohort_num in c(1, 2)) {
+  cat("\n---------------------------------------\n")
+  cat(paste("COHORT", cohort_num, "\n"))
+  cat("---------------------------------------\n")
+  
+  cohort_data <- filter(cluster_summary, Cohort == cohort_num)
+  
+  for (i in 1:nrow(cohort_data)) {
+    cat(paste0("Cluster ", cohort_data$Cluster[i], " (n = ", cohort_data$N[i], "):\n"))
+    cat(paste0("  Emotional Abuse (EM):     ", round(cohort_data$EM_mean[i], 2), " (", round(cohort_data$EM_sd[i], 2), ")\n"))
+    cat(paste0("  Physical Abuse (KM):      ", round(cohort_data$KM_mean[i], 2), " (", round(cohort_data$KM_sd[i], 2), ")\n"))
+    cat(paste0("  Sexual Abuse (SM):        ", round(cohort_data$SM_mean[i], 2), " (", round(cohort_data$SM_sd[i], 2), ")\n"))
+    cat(paste0("  Emotional Neglect (EV):   ", round(cohort_data$EV_mean[i], 2), " (", round(cohort_data$EV_sd[i], 2), ")\n"))
+    cat(paste0("  Physical Neglect (KV):    ", round(cohort_data$KV_mean[i], 2), " (", round(cohort_data$KV_sd[i], 2), ")\n"))
+    cat(paste0("  Total CTQ:                ", round(cohort_data$Total_CTQ[i], 2), "\n\n"))
+  }
+}
+
+# Create a visual representation of the clusters
+if (require(ggplot2)) {
+  # Prepare data for visualization
+  cluster_long <- cluster_summary %>%
+    select(Cohort, Cluster, N, Total_CTQ, ends_with("_mean")) %>%
+    pivot_longer(
+      cols = ends_with("_mean"),
+      names_to = "CTQ_Type",
+      values_to = "Score"
+    ) %>%
+    mutate(
+      CTQ_Type = sub("_mean", "", CTQ_Type),
+      CTQ_Type = factor(CTQ_Type, 
+                        levels = c("EM", "KM", "SM", "EV", "KV"),
+                        labels = c("Emotional Abuse", 
+                                  "Physical Abuse", 
+                                  "Sexual Abuse", 
+                                  "Emotional Neglect", 
+                                  "Physical Neglect"))
+    )
+  
+  # Create heatmap of cluster profiles
+  ggplot(cluster_long, aes(x = CTQ_Type, y = factor(Cluster), fill = Score)) +
+    geom_tile() +
+    facet_wrap(~ Cohort, labeller = labeller(Cohort = c("1" = "Cohort 1", "2" = "Cohort 2"))) +
+    scale_fill_gradient(low = "white", high = "red") +
+    labs(title = "CTQ Trauma Profiles by Cluster and Cohort",
+         x = "Trauma Type",
+         y = "Cluster",
+         fill = "Score") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  # Create bar chart of cluster profiles
+  ggplot(cluster_long, aes(x = CTQ_Type, y = Score, fill = factor(Cluster))) +
+    geom_bar(stat = "identity", position = "dodge") +
+    facet_wrap(~ Cohort, labeller = labeller(Cohort = c("1" = "Cohort 1", "2" = "Cohort 2"))) +
+    labs(title = "CTQ Trauma Profiles by Cluster and Cohort",
+         x = "Trauma Type",
+         y = "Score",
+         fill = "Cluster") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+}
+```
+
